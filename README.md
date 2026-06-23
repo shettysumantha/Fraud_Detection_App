@@ -1,7 +1,7 @@
 <<<<<<< HEAD
 # Financial Fraud Detection App
 
-Dashboard Link:https://shettysumantha-fraud-detection-app-dashboardapp-5l9ve5.streamlit.appa
+Dashboard Link:https://shettysumantha-fraud-detection-app-dashboardapp-5l9ve5.streamlit.app/
 
 ## Step 1: Data Preprocessing & ETL
 
