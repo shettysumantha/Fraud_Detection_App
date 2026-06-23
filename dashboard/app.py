@@ -61,6 +61,45 @@ st.sidebar.metric("Fraud cases", int(df["IsFraud"].sum()))
 st.sidebar.metric("Fraud rate", f"{fraud_rate:.2%}")
 
 st.sidebar.markdown("---")
+st.sidebar.header("Filters")
+min_date = df["TransactionDate"].min()
+max_date = df["TransactionDate"].max()
+if pd.notnull(min_date) and pd.notnull(max_date):
+    date_range = st.sidebar.date_input("Transaction date range", value=(min_date.date(), max_date.date()))
+else:
+    date_range = None
+
+min_amt, max_amt = float(df["Amount"].min()), float(df["Amount"].max())
+amount_range = st.sidebar.slider("Transaction amount range", min_value=0.0, max_value=max_amt, value=(min_amt, max_amt))
+
+DEFAULT_TRANSACTION_TYPES = ["purchase", "refund", "withdrawal", "transfer"]
+available_types = sorted(set(df["TransactionType"].dropna().unique().tolist()) | set(DEFAULT_TRANSACTION_TYPES))
+select_all_types = st.sidebar.checkbox("Select all transaction types", value=True)
+if select_all_types:
+    st.sidebar.markdown("**All transaction types selected**")
+    selected_types = available_types
+else:
+    selected_types = st.sidebar.multiselect(
+        "Transaction types",
+        options=available_types,
+        default=[],
+        key="transaction_type_selector",
+    )
+
+locations = sorted(df["Location"].dropna().unique().tolist())
+select_all_locations = st.sidebar.checkbox("Select all locations", value=True)
+if select_all_locations:
+    st.sidebar.markdown("**All locations selected**")
+    selected_locations = locations
+else:
+    selected_locations = st.sidebar.multiselect(
+        "Locations",
+        options=locations,
+        default=[],
+        key="location_selector",
+    )
+
+st.sidebar.markdown("---")
 st.sidebar.header("Quick Insights")
 if "best_supervised" in model_metrics:
     best = model_metrics["best_supervised"]["name"]
@@ -103,17 +142,32 @@ tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Model Metrics", "Anomaly Analytic
 PALETTE = ["#2563eb", "#fb923c", "#14b8a6", "#8b5cf6", "#ef4444", "#0f766e", "#38bdf8", "#fbbf24"]
 TEMPLATE = "plotly_white"
 
+filtered = df.copy()
+if date_range:
+    start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+    filtered = filtered[(filtered["TransactionDate"] >= start) & (filtered["TransactionDate"] <= end)]
+if amount_range:
+    filtered = filtered[(filtered["Amount"] >= amount_range[0]) & (filtered["Amount"] <= amount_range[1])]
+if selected_types:
+    filtered = filtered[filtered["TransactionType"].isin(selected_types)]
+if selected_locations:
+    filtered = filtered[filtered["Location"].isin(selected_locations)]
+
+if filtered.empty:
+    st.sidebar.error("No data matches filters. Adjust selections to view charts.")
+    st.stop()
+
 with tab1:
     st.header("Transaction Insights")
     kpi1, kpi2, kpi3 = st.columns([1,1,1])
-    kpi1.metric("Total transactions", f"{len(df):,}")
-    kpi2.metric("Fraud cases", f"{int(df['IsFraud'].sum()):,}")
-    kpi3.metric("Fraud rate", f"{fraud_rate:.2%}")
+    kpi1.metric("Total transactions", f"{len(filtered):,}")
+    kpi2.metric("Fraud cases", f"{int(filtered['IsFraud'].sum()):,}")
+    kpi3.metric("Fraud rate", f"{filtered['IsFraud'].mean():.2%}")
 
     col1, col2 = st.columns(2)
     with col1:
         monthly = (
-            df.groupby("TransactionMonth")["IsFraud"].agg(total="size", fraud="sum").reset_index()
+            filtered.groupby("TransactionMonth")["IsFraud"].agg(total="size", fraud="sum").reset_index()
         )
         monthly["fraud_rate"] = monthly["fraud"] / monthly["total"]
         fig_month = px.line(monthly, x="TransactionMonth", y="fraud_rate", markers=True, title="Monthly Fraud Rate", template=TEMPLATE)
@@ -123,31 +177,31 @@ with tab1:
 
     with col2:
         st.subheader("Top Transaction Types")
-        type_counts = df["TransactionType"].value_counts().reset_index()
+        type_counts = filtered["TransactionType"].value_counts().reset_index()
         type_counts.columns = ["TransactionType", "Count"]
         fig_type = px.bar(type_counts, x="TransactionType", y="Count", title="Transaction Type Breakdown", color="TransactionType", template=TEMPLATE, color_discrete_sequence=PALETTE)
         fig_type.update_layout(showlegend=False, plot_bgcolor="rgba(255,255,255,0.95)", paper_bgcolor="rgba(255,255,255,0.95)", title_font_color="#1e3a8a")
         st.plotly_chart(fig_type, use_container_width=True)
 
     st.subheader("Transaction Type Fraud Distribution")
-    type_fraud = df.groupby("TransactionType")["IsFraud"].sum().reset_index().sort_values("IsFraud", ascending=False)
+    type_fraud = filtered.groupby("TransactionType")["IsFraud"].sum().reset_index().sort_values("IsFraud", ascending=False)
     fig_pie = px.pie(type_fraud, names="TransactionType", values="IsFraud", title="Fraud Case Distribution by Transaction Type", template=TEMPLATE, color_discrete_sequence=PALETTE)
     fig_pie.update_layout(plot_bgcolor="rgba(255,255,255,0.95)", paper_bgcolor="rgba(255,255,255,0.95)", title_font_color="#1e3a8a")
     st.plotly_chart(fig_pie, use_container_width=True)
 
     st.subheader("Transaction Amount Distribution")
-    fig_hist = px.histogram(df, x="Amount", nbins=40, title="Transaction Amount Histogram", marginal="box", color="IsFraud", template=TEMPLATE, color_discrete_sequence=["#2563eb", "#ef4444"])
+    fig_hist = px.histogram(filtered, x="Amount", nbins=40, title="Transaction Amount Histogram", marginal="box", color="IsFraud", template=TEMPLATE, color_discrete_sequence=["#2563eb", "#ef4444"])
     fig_hist.update_layout(plot_bgcolor="rgba(255,255,255,0.95)", paper_bgcolor="rgba(255,255,255,0.95)", title_font_color="#1e3a8a")
     st.plotly_chart(fig_hist, use_container_width=True)
 
     st.subheader("High Risk Transactions")
-    fig_scatter = px.scatter(df, x="Amount", y="RiskScore", size="Amount", color="IsFraud", hover_data=["TransactionType", "Location"], title="Amount vs Risk Score", template=TEMPLATE, color_discrete_map={0: "#2563eb", 1: "#ef4444"})
+    fig_scatter = px.scatter(filtered, x="Amount", y="RiskScore", size="Amount", color="IsFraud", hover_data=["TransactionType", "Location"], title="Amount vs Risk Score", template=TEMPLATE, color_discrete_map={0: "#2563eb", 1: "#ef4444"})
     fig_scatter.update_layout(plot_bgcolor="rgba(255,255,255,0.95)", paper_bgcolor="rgba(255,255,255,0.95)", title_font_color="#1e3a8a")
     st.plotly_chart(fig_scatter, use_container_width=True)
 
     st.subheader("Fraud Share by Location")
     fraud_by_location = (
-        df.groupby("Location")["IsFraud"].mean().reset_index().sort_values("IsFraud", ascending=False).head(10)
+        filtered.groupby("Location")["IsFraud"].mean().reset_index().sort_values("IsFraud", ascending=False).head(10)
     )
     fraud_by_location.columns = ["Location", "FraudRate"]
     fig_loc = px.bar(fraud_by_location, x="Location", y="FraudRate", title="Top Fraud Rate Locations", color="FraudRate", template=TEMPLATE, color_continuous_scale=px.colors.sequential.OrRd)
@@ -172,7 +226,7 @@ with tab1:
         "location_betweenness",
         "type_betweenness",
     ]
-    corr = df[numeric_cols].corr()
+    corr = filtered[numeric_cols].corr()
     fig = px.imshow(corr, text_auto=True, aspect="auto", title="Feature Correlation Heatmap", color_continuous_scale=px.colors.diverging.RdBu, template=TEMPLATE)
     fig.update_layout(height=600, plot_bgcolor="rgba(255,255,255,0.95)", paper_bgcolor="rgba(255,255,255,0.95)", title_font_color="#1e3a8a")
     st.plotly_chart(fig, use_container_width=True)
@@ -237,21 +291,21 @@ with tab3:
     st.header("Anomaly & Risk Monitoring")
     col1, col2 = st.columns(2)
     with col1:
-        st.plotly_chart(px.histogram(df, x="RiskScore", nbins=40, title="Risk Score Distribution", color="IsFraud"), use_container_width=True)
+        st.plotly_chart(px.histogram(filtered, x="RiskScore", nbins=40, title="Risk Score Distribution", color="IsFraud", template=TEMPLATE), use_container_width=True)
     with col2:
-        st.plotly_chart(px.histogram(df[df["IsFraud"] == 1], x="Amount", nbins=40, title="Fraudulent Transaction Amounts", color="TransactionType"), use_container_width=True)
+        st.plotly_chart(px.histogram(filtered[filtered["IsFraud"] == 1], x="Amount", nbins=40, title="Fraudulent Transaction Amounts", color="TransactionType", template=TEMPLATE), use_container_width=True)
 
-    st.plotly_chart(px.line(df.groupby("TransactionMonth")["IsFraud"].mean().reset_index(), x="TransactionMonth", y="IsFraud", title="Monthly Fraud Incidence", markers=True), use_container_width=True)
-    st.plotly_chart(px.box(df, x="TransactionType", y="RiskScore", title="Risk Score by Transaction Type"), use_container_width=True)
+    st.plotly_chart(px.line(filtered.groupby("TransactionMonth")["IsFraud"].mean().reset_index(), x="TransactionMonth", y="IsFraud", title="Monthly Fraud Incidence", markers=True, template=TEMPLATE), use_container_width=True)
+    st.plotly_chart(px.box(filtered, x="TransactionType", y="RiskScore", title="Risk Score by Transaction Type", template=TEMPLATE), use_container_width=True)
 
 with tab4:
     st.header("Graph-Based Features")
-    if all(col in df.columns for col in ["merchant_degree", "location_degree", "type_degree"]):
-        top_merchants = df.groupby("MerchantID")["merchant_degree"].mean().reset_index().sort_values("merchant_degree", ascending=False).head(10)
+    if all(col in filtered.columns for col in ["merchant_degree", "location_degree", "type_degree"]):
+        top_merchants = filtered.groupby("MerchantID")["merchant_degree"].mean().reset_index().sort_values("merchant_degree", ascending=False).head(10)
         st.subheader("Top merchant degree")
-        st.plotly_chart(px.bar(top_merchants, x="MerchantID", y="merchant_degree", title="Merchant Graph Degree"), use_container_width=True)
+        st.plotly_chart(px.bar(top_merchants, x="MerchantID", y="merchant_degree", title="Merchant Graph Degree", template=TEMPLATE, color_discrete_sequence=PALETTE), use_container_width=True)
 
         st.subheader("Risk vs Graph Centrality")
-        st.plotly_chart(px.scatter(df, x="merchant_betweenness", y="merchant_fraud_rate", color="IsFraud", title="Merchant Betweenness vs Fraud Rate"), use_container_width=True)
+        st.plotly_chart(px.scatter(filtered, x="merchant_betweenness", y="merchant_fraud_rate", color="IsFraud", title="Merchant Betweenness vs Fraud Rate", template=TEMPLATE, color_discrete_map={0: "#2563eb", 1: "#ef4444"}), use_container_width=True)
     else:
         st.info("Graph features are not available in the current dataset. Run preprocessing with graph feature extraction enabled.")
