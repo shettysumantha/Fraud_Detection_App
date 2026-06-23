@@ -30,7 +30,7 @@ python ml_pipeline/train_model.py --input-csv data/processed_transactions.csv --
 
 This training pipeline evaluates:
 - supervised learning: Logistic Regression, Decision Tree, Random Forest, XGBoost, LightGBM
-- unsupervised anomaly detection: Isolation Forest, One-Class SVM, Autoencoder (if TensorFlow/Keras is installed)
+- unsupervised anomaly detection: Isolation Forest, One-Class SVM, Autoencoder (optional; install TensorFlow/Keras locally for autoencoder support)
 - graph-based entity feature extraction from merchants, locations, and transaction types
 - risk scoring and anomaly monitoring for dashboard analytics
 

@@ -13,8 +13,6 @@ matplotlib
 plotly
 seaborn
 networkx
-tensorflow
-keras
 python-jose
 passlib
 python-multipart
