@@ -1,0 +1,17 @@
+{
+  "models": [
+    {
+      "version": 1,
+      "timestamp": "2026-06-23T18:10:33.290140Z",
+      "model_file": "models\\fraud_pipeline.joblib",
+      "model_name": "logistic_regression",
+      "metrics": {
+        "accuracy": 0.7319,
+        "precision": 0.022213994816734542,
+        "recall": 0.6,
+        "f1": 0.04284184219921456,
+        "roc_auc": 0.7478133838383838
+      }
+    }
+  ]
+}

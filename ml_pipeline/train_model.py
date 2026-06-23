@@ -1,8 +1,9 @@
 import argparse
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -92,6 +93,7 @@ CATEGORICAL_FEATURES = ["TransactionType", "Location"]
 
 MODEL_PATH = Path("models/fraud_pipeline.joblib")
 MODEL_METRICS_PATH = Path("models/model_metrics.json")
+MODEL_REGISTRY_PATH = Path("models/model_registry.json")
 AUTOENCODER_PATH = Path("models/autoencoder.h5")
 
 
@@ -115,7 +117,7 @@ def build_preprocessor() -> ColumnTransformer:
     )
 
 
-def build_supervised_models() -> Dict[str, Pipeline]:
+def build_supervised_models(rf_estimators: int = 200, n_jobs: Optional[int] = None) -> Dict[str, Pipeline]:
     preprocessor = build_preprocessor()
     models: Dict[str, Pipeline] = {}
 
@@ -133,7 +135,7 @@ def build_supervised_models() -> Dict[str, Pipeline]:
             ("preprocessor", preprocessor),
             (
                 "classifier",
-                RandomForestClassifier(n_estimators=200, class_weight="balanced", random_state=42),
+                RandomForestClassifier(n_estimators=rf_estimators, class_weight="balanced", random_state=42, n_jobs=n_jobs),
             ),
         ]
     )
@@ -143,7 +145,7 @@ def build_supervised_models() -> Dict[str, Pipeline]:
                 ("preprocessor", preprocessor),
                 (
                     "classifier",
-                    XGBClassifier(use_label_encoder=False, eval_metric="logloss", random_state=42),
+                    XGBClassifier(use_label_encoder=False, eval_metric="logloss", random_state=42, n_jobs=n_jobs),
                 ),
             ]
         )
@@ -160,9 +162,9 @@ def build_supervised_models() -> Dict[str, Pipeline]:
     return models
 
 
-def build_unsupervised_models() -> Dict[str, object]:
+def build_unsupervised_models(n_jobs: Optional[int] = None) -> Dict[str, object]:
     models: Dict[str, object] = {}
-    models["isolation_forest"] = IsolationForest(n_estimators=200, contamination=0.02, random_state=42)
+    models["isolation_forest"] = IsolationForest(n_estimators=200, contamination=0.02, random_state=42, n_jobs=n_jobs)
     models["one_class_svm"] = OneClassSVM(gamma="scale", nu=0.02)
     return models
 
@@ -215,22 +217,33 @@ def evaluate_model(name: str, model: Pipeline, X_train: pd.DataFrame, X_test: pd
     return metrics
 
 
-def evaluate_unsupervised(name: str, model: object, X_train: pd.DataFrame, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, float]:
+def evaluate_unsupervised(
+    name: str,
+    model: object,
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    preprocessor: Optional[ColumnTransformer] = None,
+) -> Dict[str, float]:
     logging.info("Training unsupervised model: %s", name)
-    model.fit(X_train)
+
+    if preprocessor is not None:
+        X_train_transformed = preprocessor.fit_transform(X_train)
+        X_test_transformed = preprocessor.transform(X_test)
+    else:
+        X_train_transformed = X_train
+        X_test_transformed = X_test
+
+    model.fit(X_train_transformed)
     if hasattr(model, "decision_function"):
-        raw_scores = model.decision_function(X_test)
+        raw_scores = model.decision_function(X_test_transformed)
     elif hasattr(model, "score_samples"):
-        raw_scores = model.score_samples(X_test)
+        raw_scores = model.score_samples(X_test_transformed)
     else:
         raise ValueError(f"Model {name} does not support anomaly scoring")
 
-    if name == "isolation_forest":
-        anomaly_score = -raw_scores
-    else:
-        anomaly_score = -raw_scores
-
-    predicted = model.predict(X_test)
+    anomaly_score = -raw_scores
+    predicted = model.predict(X_test_transformed)
     predicted_labels = np.where(predicted == -1, 1, 0)
 
     metrics = {
@@ -245,9 +258,18 @@ def evaluate_unsupervised(name: str, model: object, X_train: pd.DataFrame, X_tes
     return metrics
 
 
-def train_autoencoder(X_train: pd.DataFrame, X_test: pd.DataFrame, y_test: pd.Series) -> Optional[Dict[str, float]]:
+def train_autoencoder(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    preprocessor: Optional[ColumnTransformer] = None,
+) -> Optional[Dict[str, float]]:
     if not TENSORFLOW_AVAILABLE:
         return None
+
+    if preprocessor is not None:
+        X_train = preprocessor.fit_transform(X_train)
+        X_test = preprocessor.transform(X_test)
 
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
@@ -293,6 +315,37 @@ def select_best_model(results: Dict[str, Dict[str, float]]) -> Tuple[str, Pipeli
     return best_name, best_model, best_metrics
 
 
+def load_registry(path: Path = MODEL_REGISTRY_PATH) -> Dict[str, Any]:
+    if not path.exists():
+        return {"models": []}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"models": []}
+
+
+def save_registry_entry(
+    model_output: Path,
+    model_name: str,
+    metrics: Dict[str, float],
+    registry_path: Path = MODEL_REGISTRY_PATH,
+) -> Dict[str, Any]:
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry = load_registry(registry_path)
+    version = len(registry.get("models", [])) + 1
+    entry = {
+        "version": version,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "model_file": str(model_output),
+        "model_name": model_name,
+        "metrics": metrics,
+    }
+    registry.setdefault("models", []).append(entry)
+    registry_path.write_text(json.dumps(registry, indent=2), encoding="utf-8")
+    logging.info("Saved model registry entry to %s", registry_path)
+    return entry
+
+
 def save_metrics(report: Dict[str, Dict[str, Dict[str, float]]], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -306,6 +359,8 @@ def train_model(
     random_state: int = 42,
     model_output: Path = MODEL_PATH,
     metrics_output: Path = MODEL_METRICS_PATH,
+    rf_estimators: int = 200,
+    n_jobs: Optional[int] = None,
 ) -> None:
     df = load_processed_data(processed_csv)
     df = df.dropna(subset=FEATURE_COLUMNS + ["IsFraud"])
@@ -320,7 +375,7 @@ def train_model(
     training_results: Dict[str, Dict[str, object]] = {}
     metrics_report: Dict[str, Dict[str, Dict[str, float]]] = {"supervised": {}, "unsupervised": {}}
 
-    supervised_models = build_supervised_models()
+    supervised_models = build_supervised_models(rf_estimators=rf_estimators, n_jobs=n_jobs)
     for name, model in supervised_models.items():
         metrics = evaluate_model(name, model, X_train, X_test, y_train, y_test)
         training_results[name] = {"model": model, "metrics": metrics}
@@ -331,16 +386,17 @@ def train_model(
 
     metrics_report["best_supervised"] = {"name": best_name, "metrics": best_metrics}
 
-    unsupervised_models = build_unsupervised_models()
+    unsupervised_models = build_unsupervised_models(n_jobs=n_jobs)
     normal_mask = y_train == 0
     X_train_normal = X_train[normal_mask] if normal_mask.sum() > 0 else X_train
 
+    preprocessor = build_preprocessor()
     for name, model in unsupervised_models.items():
-        metrics = evaluate_unsupervised(name, model, X_train_normal, X_test, y_test)
+        metrics = evaluate_unsupervised(name, model, X_train_normal, X_test, y_test, preprocessor=preprocessor)
         metrics_report["unsupervised"][name] = metrics
 
     if TENSORFLOW_AVAILABLE:
-        auto_metrics = train_autoencoder(X_train_normal, X_test, y_test)
+        auto_metrics = train_autoencoder(X_train_normal, X_test, y_test, preprocessor=preprocessor)
         if auto_metrics is not None:
             metrics_report["unsupervised"]["autoencoder"] = auto_metrics
 
@@ -349,6 +405,7 @@ def train_model(
     logging.info("Saved best supervised model to %s", model_output)
 
     save_metrics(metrics_report, metrics_output)
+    save_registry_entry(model_output, best_name, best_metrics)
 
 
 def main() -> None:
@@ -370,6 +427,8 @@ def main() -> None:
     )
     parser.add_argument("--test-size", type=float, default=0.2, help="Test split fraction.")
     parser.add_argument("--random-state", type=int, default=42, help="Random seed.")
+    parser.add_argument("--rf-estimators", type=int, default=200, help="Number of trees for RandomForest.")
+    parser.add_argument("--n-jobs", type=int, default=None, help="Number of jobs to run in parallel (pass 1 for single-threaded).")
     args = parser.parse_args()
 
     train_model(
@@ -378,6 +437,8 @@ def main() -> None:
         random_state=args.random_state,
         model_output=Path(args.output_model),
         metrics_output=Path(args.output_metrics),
+        rf_estimators=args.rf_estimators,
+        n_jobs=args.n_jobs,
     )
 
 

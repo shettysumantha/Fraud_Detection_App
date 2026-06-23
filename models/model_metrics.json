@@ -1,0 +1,65 @@
+{
+  "supervised": {
+    "logistic_regression": {
+      "accuracy": 0.7319,
+      "precision": 0.022213994816734542,
+      "recall": 0.6,
+      "f1": 0.04284184219921456,
+      "roc_auc": 0.7478133838383838
+    },
+    "decision_tree": {
+      "accuracy": 0.63905,
+      "precision": 0.01785959609836516,
+      "recall": 0.65,
+      "f1": 0.03476400588313946,
+      "roc_auc": 0.6983440656565656
+    },
+    "random_forest": {
+      "accuracy": 0.99,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "roc_auc": 0.5243376262626263
+    },
+    "xgboost": {
+      "accuracy": 0.9899,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "roc_auc": 0.7263560606060607
+    }
+  },
+  "unsupervised": {
+    "isolation_forest": {
+      "accuracy": 0.9696,
+      "precision": 0.011961722488038277,
+      "recall": 0.025,
+      "f1": 0.016181229773462785,
+      "roc_auc": 0.5288363636363637
+    },
+    "one_class_svm": {
+      "accuracy": 0.9698,
+      "precision": 0.01904761904761905,
+      "recall": 0.04,
+      "f1": 0.02580645161290323,
+      "roc_auc": 0.4714752525252526
+    },
+    "autoencoder": {
+      "accuracy": 0.9416,
+      "precision": 0.016,
+      "recall": 0.08,
+      "f1": 0.02666666666666667,
+      "roc_auc": 0.5313265151515152
+    }
+  },
+  "best_supervised": {
+    "name": "logistic_regression",
+    "metrics": {
+      "accuracy": 0.7319,
+      "precision": 0.022213994816734542,
+      "recall": 0.6,
+      "f1": 0.04284184219921456,
+      "roc_auc": 0.7478133838383838
+    }
+  }
+}

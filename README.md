@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Financial Fraud Detection App
 
 ## Step 1: Data Preprocessing & ETL
@@ -34,8 +33,6 @@ This training pipeline evaluates:
 - graph-based entity feature extraction from merchants, locations, and transaction types
 - risk scoring and anomaly monitoring for dashboard analytics
 
-The Streamlit dashboard displays dataset insights, fraud distribution charts, model evaluation comparison, anomaly analytics, and graph-based feature summaries.
-
 ## Step 3: Run the API
 
 ```bash
@@ -44,7 +41,16 @@ uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
 
 Use POST `/api/predict` with transaction JSON to get fraud predictions.
 
-Optional: view evaluation metrics via GET `/api/metrics`.
+Optional endpoints:
+- GET `/api/metrics` — returns the latest model metrics JSON
+- GET `/api/registry` — returns the model registry history
+- POST `/api/retrain` — triggers a retrain and updates the model, metrics, and registry
+
+Example retrain call:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/retrain?rf_estimators=50&n_jobs=1"
+```
 
 ## Step 4: Streaming skeleton & alerting
 
@@ -65,6 +71,3 @@ streamlit run dashboard/app.py
 ```bash
 pytest -q
 ```
-=======
-# Fraud_Detection_App
->>>>>>> 0247286babbcbabe269df3c61af71b8050960f91
