@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Financial Fraud Detection App
 
 ## Step 1: Data Preprocessing & ETL
@@ -64,3 +65,6 @@ streamlit run dashboard/app.py
 ```bash
 pytest -q
 ```
+=======
+# Fraud_Detection_App
+>>>>>>> 0247286babbcbabe269df3c61af71b8050960f91
