@@ -1,0 +1,16 @@
+pandas
+numpy
+scikit-learn
+xgboost
+streamlit
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+joblib
+matplotlib
+plotly
+seaborn
+python-jose
+passlib
+python-multipart
