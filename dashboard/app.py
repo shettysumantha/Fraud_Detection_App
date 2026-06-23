@@ -17,6 +17,22 @@ MODEL_PATH = Path("models/fraud_pipeline.joblib")
 METRICS_PATH = Path("models/model_metrics.json")
 REGISTRY_PATH = Path("models/model_registry.json")
 
+@st.cache_data
+def load_dataset(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    if "TransactionDate" in df.columns:
+        df["TransactionDate"] = pd.to_datetime(df["TransactionDate"], dayfirst=True, errors="coerce")
+    else:
+        df["TransactionDate"] = pd.NaT
+    return df
+
+@st.cache_data
+def load_json(path: Path) -> dict:
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    return {}
+
 st.set_page_config(page_title="Fraud Detection Dashboard", layout="wide")
 st.markdown("""
 <style>
@@ -38,20 +54,9 @@ if not DATA_PATH.exists():
     st.stop()
 
 
-df = pd.read_csv(DATA_PATH)
-if "TransactionDate" in df.columns:
-    df["TransactionDate"] = pd.to_datetime(df["TransactionDate"], dayfirst=True, errors="coerce")
-else:
-    df["TransactionDate"] = pd.NaT
-
-model_metrics = {}
-model_registry = {}
-if METRICS_PATH.exists():
-    with open(METRICS_PATH, "r", encoding="utf-8") as fh:
-        model_metrics = json.load(fh)
-if REGISTRY_PATH.exists():
-    with open(REGISTRY_PATH, "r", encoding="utf-8") as fh:
-        model_registry = json.load(fh)
+df = load_dataset(DATA_PATH)
+model_metrics = load_json(METRICS_PATH)
+model_registry = load_json(REGISTRY_PATH)
 
 fraud_rate = df["IsFraud"].mean()
 
