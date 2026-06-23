@@ -1,0 +1,23 @@
+CREATE TABLE transactions (
+    TransactionID INTEGER PRIMARY KEY,
+    TransactionDate TIMESTAMP,
+    Amount NUMERIC,
+    MerchantID VARCHAR(50),
+    TransactionType VARCHAR(50),
+    Location VARCHAR(100),
+    IsFraud INTEGER,
+    TransactionDay INTEGER,
+    TransactionMonth INTEGER,
+    TransactionWeekday INTEGER,
+    TransactionQuarter INTEGER,
+    TransactionYear INTEGER,
+    AmountLog NUMERIC,
+    HighAmount INTEGER,
+    merchant_transaction_count INTEGER,
+    merchant_fraud_rate NUMERIC,
+    location_transaction_count INTEGER,
+    location_fraud_rate NUMERIC,
+    type_transaction_count INTEGER,
+    type_fraud_rate NUMERIC,
+    RiskScore NUMERIC
+);

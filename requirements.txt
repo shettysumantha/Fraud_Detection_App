@@ -2,6 +2,7 @@ pandas
 numpy
 scikit-learn
 xgboost
+lightgbm
 streamlit
 fastapi
 uvicorn
@@ -11,6 +12,11 @@ joblib
 matplotlib
 plotly
 seaborn
+networkx
+tensorflow
+keras
 python-jose
 passlib
 python-multipart
+kafka-python
+pytest
